@@ -205,3 +205,10 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# claude-put-in-work (session-specific files)
+PROMPT.md
+BUILD_PROGRESS.md
+build-logs/
+CLAUDE.md
+.claude/
