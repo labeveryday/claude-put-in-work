@@ -1,72 +1,80 @@
 # claude-put-in-work
 
-A framework for autonomous, multi-session app building with Claude Code. Write a detailed `PROMPT.md` describing your app, run `build.sh`, and let Claude build it end-to-end — overnight if you want.
+A framework for autonomous, multi-session app building with Claude Code. Describe what you want built, run `build.sh`, and let Claude build it end-to-end — overnight if you want.
 
 ## How It Works
 
 ```
-┌─────────────┐     ┌───────────────┐     ┌──────────────────┐
-│  PROMPT.md   │────▶│   build.sh    │────▶│   Claude Code    │
-│  (your spec) │     │  (loop runner)│     │  (builds the app)│
-└─────────────┘     └───────────────┘     └──────────────────┘
-                           │                        │
-                           │     ┌──────────────────┘
-                           ▼     ▼
-                    ┌─────────────────┐
-                    │ BUILD_PROGRESS.md│
-                    │ (session handoff)│
-                    └─────────────────┘
+ 1. PLAN                  2. REVIEW               3. BUILD
+
+ Your idea/plan           You review &             ./build.sh
+       │                  approve the spec               │
+       v                        │                        v
+/autonomous-build               │              ┌───────────────────┐
+       │                        │              │ Claude Code loop   │
+       v                        v              │ session 1 -> 2 ... │
+┌─────────────┐          ┌─────────────┐       └────────┬──────────┘
+│  PROMPT.md   │────────>│  PROMPT.md   │               │
+│  build.sh   │          │  (approved)  │               v
+└─────────────┘          └─────────────┘       ┌─────────────────┐
+                                               │ BUILD_PROGRESS.md│
+                                               │ (session handoff)│
+                                               └─────────────────┘
+                                               "ALL PHASES COMPLETE"
+                                                  -> stops early
 ```
 
-1. **You write** a `PROMPT.md` — a detailed spec for the app you want built (architecture, design, phases, verification steps)
-2. **`build.sh` runs** Claude Code in a loop, piping your prompt each session
-3. **Claude reads** `BUILD_PROGRESS.md` at the start of each session to pick up where it left off
-4. **Claude builds** the next phase, commits, updates progress, and exits
-5. **Next session** picks up automatically — no human intervention needed
+1. **Plan** — Describe your idea and run `/autonomous-build`. The skill analyzes your plan and generates a `PROMPT.md` spec and `build.sh` runner.
+2. **Review** — Read the generated `PROMPT.md`. Check the tech stack, architecture, phases, and security rules. Edit anything that's off.
+3. **Build** — Run `./build.sh`. Claude Code runs in a loop, reading `BUILD_PROGRESS.md` each session to pick up where it left off. No human intervention needed until it's done.
 
 The key insight: `BUILD_PROGRESS.md` acts as a handoff document between sessions, giving Claude continuity across the entire build.
 
 ## Quick Start
 
-### 1. Write Your Prompt
+### 1. Plan
 
-Copy the sample template and fill it in with your project details:
+Describe your idea and let the skill generate your build spec:
 
-```bash
-cp SAMPLE_PROMPT.md PROMPT.md
+```
+/autonomous-build a task management app with categories and due dates
 ```
 
-Edit `PROMPT.md` with your app's:
-- Mission and core workflows
-- Tech stack and architecture
-- Design requirements (if applicable)
-- Phased build order with verification steps
-- Commit and documentation rules
+The skill analyzes your plan, asks clarifying questions, then generates `PROMPT.md` and `build.sh` in your target project directory.
 
-See [SAMPLE_PROMPT.md](SAMPLE_PROMPT.md) for the annotated template with guidance comments and a minimal concrete example.
+**Or manually:** Copy `SAMPLE_PROMPT.md` to `PROMPT.md` in your project and fill in the placeholders. See [SAMPLE_PROMPT.md](SAMPLE_PROMPT.md) for the annotated template with guidance and a concrete example.
 
-### 2. Run the Build
+### 2. Review
+
+Read the generated `PROMPT.md` before running anything. Check:
+- Tech stack and library choices
+- Architecture and API design
+- Phase breakdown and verification steps
+- Security rules
+
+Edit anything that doesn't match your intent. This is your last checkpoint before autonomous execution.
+
+### 3. Build
 
 ```bash
 chmod +x build.sh
 ./build.sh
 ```
 
-This will:
-- Run Claude Code up to 10 sessions (configurable in `build.sh`)
+The script will:
+- Confirm before starting (pass `--yes` to skip)
+- Run Claude Code up to N sessions (configurable in `build.sh`)
 - Log each session to `build-logs/`
-- Pause 5 seconds between runs
+- Stop early if `BUILD_PROGRESS.md` indicates all phases are complete
 
-### 3. Check Progress
-
-Open `BUILD_PROGRESS.md` in your project to see what's been completed, what's in progress, and what's next.
+Check `BUILD_PROGRESS.md` anytime to see what's been completed, what's in progress, and what's next.
 
 ## File Reference
 
 | File | Purpose |
 |------|---------|
-| `PROMPT.md` | **Your app spec** — the prompt Claude reads each session. You create this. |
-| `SAMPLE_PROMPT.md` | Annotated template with `[PLACEHOLDERS]`, `<!-- GUIDANCE -->` comments, and a minimal todo app example. Copy this to start your `PROMPT.md`. |
+| `PROMPT.md` | **Your app spec** — the prompt Claude reads each session. You create this (or the skill generates it). |
+| `SAMPLE_PROMPT.md` | Annotated template with `[PLACEHOLDERS]`, `<!-- GUIDANCE -->` comments, and a minimal todo app example. |
 | `build.sh` | Loop runner that pipes `PROMPT.md` into Claude Code repeatedly. |
 | `BUILD_PROGRESS.md` | Auto-generated by Claude during builds. Tracks completed/in-progress/next steps across sessions. |
 | `build-logs/` | Auto-generated. One log file per session for debugging. |
@@ -84,7 +92,7 @@ A well-structured prompt has these sections:
 7. **Architecture** — How pieces connect, data models, storage, API endpoints
 8. **Documentation rules** — What docs to maintain and when to update them
 9. **Build order** — Phased plan where each phase is testable and completable in one session
-10. **Commit rules** — Safety rails for git operations
+10. **Security & commit rules** — Safety rails for git operations and secret protection
 
 See the [Tips section](SAMPLE_PROMPT.md#tips-for-writing-a-great-promptmd) in `SAMPLE_PROMPT.md` for detailed advice.
 
@@ -94,33 +102,40 @@ Edit `build.sh` to adjust:
 
 ```bash
 MAX_RUNS=10          # Maximum number of Claude sessions
-sleep 5              # Pause between runs (seconds)
+sleep 5              # Pause between sessions (seconds)
 ```
 
-### About `--dangerously-skip-permissions`
+### Security Considerations
 
-The script uses `--dangerously-skip-permissions` so Claude can execute shell commands, write files, and commit code without prompting you for approval each time. This is what makes unattended overnight builds possible — but it means Claude has full access to your system during the run.
+The script uses `--dangerously-skip-permissions` so Claude can execute shell commands, write files, and commit code without prompting for approval. This is what makes unattended builds possible — but it means Claude has full system access during the run.
 
-**What this means in practice:**
+**What this means:**
 - Claude can run any shell command, read/write any file, and make git commits
-- There are no interactive "allow this action?" prompts to pause execution
-- Your `PROMPT.md` commit rules are the only guardrails
+- There are no interactive "allow this action?" prompts
+- Your `PROMPT.md` security rules are the primary guardrails
 
 **How to mitigate risk:**
-- Always include explicit commit rules (no `git add .`, no secrets, no force push)
-- Run builds in an isolated environment (container, VM, or dedicated machine) if you're cautious
+- Always include the security & commit rules section in your `PROMPT.md` (the template includes these by default)
+- Run builds in an isolated environment (container, VM, or dedicated machine) when possible
 - Review `build-logs/` and `git log` after the build completes
 - Keep sensitive files (`.env`, credentials) outside the project directory or in `.gitignore`
+- Never store API keys, tokens, or passwords in files within the project — use environment variables
 
-If you'd rather run interactively with permission prompts, remove the flag from `build.sh` — but each session will block waiting for approval on every file write and command.
+**Running interactively:** Remove `--dangerously-skip-permissions` from `build.sh` if you'd rather approve each action — but each session will block waiting for your input.
 
 ## Tips
 
 - **Phase sizing matters** — Each phase should be completable in one session (~1-3 hours of agent work). If a phase has 15+ tasks, split it.
 - **Absolute paths** — Use full paths in your prompt so they work across sessions.
-- **Verification steps** — Include concrete test steps in each phase ("Test: create X → see Y"). This lets Claude confirm its own work.
+- **Verification steps** — Include concrete test steps in each phase ("Test: create X -> see Y"). This lets Claude confirm its own work.
 - **Reference projects** — "Follow the architecture of /path/to/project" is more precise than pages of architecture description.
-- **Commit rules prevent disasters** — Without explicit rules, the agent may `git add .` and commit secrets or generated files.
+- **Security rules prevent disasters** — Without explicit rules, the agent may `git add .` and commit secrets or generated files.
+- **Early completion** — The build runner checks `BUILD_PROGRESS.md` for completion markers after each session. When Claude writes "ALL PHASES COMPLETE" at the top, the runner stops — no wasted sessions.
+
+## Prerequisites
+
+- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
+- A shell environment (bash/zsh)
 
 ## License
 

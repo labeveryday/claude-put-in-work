@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.0] - 2026-04-02
+
+### Added
+- `/autonomous-build` skill — interactive conversation that gathers requirements and generates `PROMPT.md` + `build.sh` for any target project
+- Pre-flight check in `build.sh` — fails fast with a helpful message if `PROMPT.md` is missing
+- Confirmation prompt before running (skip with `--yes` flag)
+- Early completion detection — build runner stops when `BUILD_PROGRESS.md` indicates all phases are done
+- Graceful Ctrl+C handling with clean exit message
+- Progress summary output at the end of a build (prints first 30 lines of `BUILD_PROGRESS.md`)
+- "Security & Commit Rules" section in `SAMPLE_PROMPT.md` covering secret protection and filesystem safety
+- "ALL PHASES COMPLETE" convention for signaling build completion in `BUILD_PROGRESS.md`
+- Prerequisites section in README
+
+### Changed
+- Renamed skill from `build-prompt` to `autonomous-build` to match the slash command name
+- Hardened `build.sh` with `set -euo pipefail` instead of just `set -e`
+- README now features the `/autonomous-build` skill as the primary getting-started path
+- Made all files generic — removed hardcoded paths so anyone can clone and use the repo
+- Reorganized commit rules in `SAMPLE_PROMPT.md` into a broader "Security & Commit Rules" section with git safety, secret protection, and filesystem safety subsections
+
+### Removed
+- Old `build-prompt` skill directory (replaced by `autonomous-build`)
+
 ## [0.2.0] - 2026-02-25
 
 ### Added

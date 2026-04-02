@@ -3,6 +3,10 @@
 > **How to use this file:** Copy this file to `PROMPT.md`, replace all `[PLACEHOLDER]` values
 > and `<!-- GUIDANCE -->` comments with your project-specific details, then delete any sections
 > that don't apply. The structure below is battle-tested for multi-session autonomous builds.
+>
+> **Or use the skill:** Run `/autonomous-build` in Claude Code to generate a `PROMPT.md`
+> interactively — it will ask you questions and produce a ready-to-run spec.
+>
 > See the "Minimal Example: Todo App" section at the bottom for a concrete, filled-out version.
 
 ---
@@ -12,7 +16,7 @@
 Before doing ANYTHING else, assess the current state of the project:
 
 1. Read BUILD_PROGRESS.md in this repo (if it exists) to see what's been completed
-2. Run `find . -name "*.[MAIN_EXTENSION]" -not -path "./.venv/*" 2>/dev/null | head -80` and `ls -la` to see what files exist
+2. Run `find . -name "*.[MAIN_EXTENSION]" -not -path "./.venv/*" -not -path "./node_modules/*" 2>/dev/null | head -80` and `ls -la` to see what files exist
 3. Check if the app runs: `[COMMAND_TO_VERIFY_APP_STARTS]`
 4. Check if existing interfaces still work: `[COMMAND_TO_VERIFY_CLI_OR_TESTS]`
 
@@ -49,6 +53,8 @@ This file is your handoff to the next session. Be specific. Example:
 Finish the dashboard chart component in frontend/src/components/Dashboard.jsx — the data
 fetching works but the chart library isn't rendering. Then move to Settings page.
 ```
+
+**When ALL phases are complete**, add "ALL PHASES COMPLETE" at the top of BUILD_PROGRESS.md so the build runner can stop early.
 
 ---
 
@@ -166,13 +172,13 @@ that someone could build it without asking questions.]
 ```
 [Draw your local architecture. Example:]
 
-Browser → localhost:[PORT]
-│
+Browser -> localhost:[PORT]
+|
 [Framework] Server
 ├── Static files ([frontend tech])
 ├── REST endpoints
-│   ├── GET  /api/[resource]         → [description]
-│   ├── POST /api/[resource]         → [description]
+│   ├── GET  /api/[resource]         -> [description]
+│   ├── POST /api/[resource]         -> [description]
 │   └── [more endpoints...]
 └── [Backend services]
     ├── [Service 1]
@@ -261,7 +267,7 @@ Before marking a phase complete in BUILD_PROGRESS.md, verify:
      - Each phase should be completable in one session (1-3 hours of agent work)
      - Each phase should produce something testable
      - Earlier phases should NOT depend on later phases
-     - Include specific verification steps ("Test: do X → see Y")
+     - Include specific verification steps ("Test: do X -> see Y")
      - Include doc updates in every phase
 
      A good phase has: implementation tasks, test/verification steps, doc updates.
@@ -288,7 +294,7 @@ Before marking a phase complete in BUILD_PROGRESS.md, verify:
 - [ ] [Implement storage layer (database, file system, etc.)]
 - [ ] [Write CRUD API endpoints or CLI commands]
 - [ ] [Seed with initial/test data if needed]
-- [ ] Test: [create a record → read it back → update → delete → verify]
+- [ ] Test: [create a record -> read it back -> update -> delete -> verify]
 - [ ] **Docs:** Update README.md, CHANGELOG.md
 
 ### Phase 3: [Primary Workflow]
@@ -299,7 +305,7 @@ Before marking a phase complete in BUILD_PROGRESS.md, verify:
 - [ ] [Build the primary UI / interface]
 - [ ] [Implement the core business logic]
 - [ ] [Wire up frontend to backend]
-- [ ] Test: [full workflow: input → process → output → verify]
+- [ ] Test: [full workflow: input -> process -> output -> verify]
 - [ ] **Docs:** Update README.md, CHANGELOG.md
 
 ### Phase 4: [Secondary Workflow]
@@ -343,19 +349,31 @@ Before marking a phase complete in BUILD_PROGRESS.md, verify:
 
 ---
 
-## Commit Rules
+## Security & Commit Rules
 
 <!-- GUIDANCE: These rules prevent common autonomous build mistakes.
      Customize for your project but keep the safety rules. -->
 
+### Git Safety
+
 - Commit after completing each phase
-- Never mention Claude, Anthropic, or AI in commit messages
-- Never commit CLAUDE.md or .claude/
 - Keep commits focused and descriptive
+- Use `git add <specific files>` — **NEVER** use `git add .` or `git add -A`
+- Never use `git push --force`
+- Never commit CLAUDE.md or .claude/
+
+### Secret Protection
+
 - **NEVER commit secrets, API keys, tokens, or credentials of any kind**
 - Never commit .env files or anything in secrets/
-- Before every commit, run `git diff --cached` and scan for anything that looks like an API key, token, password, or secret. If found, unstage it immediately.
-- Use `git add <specific files>` — NEVER use `git add .` or `git add -A`
+- Before every commit, run `git diff --cached` and scan for anything that looks like an API key, token, password, or secret — if found, unstage it immediately
+- If the app needs API keys or credentials, read them from environment variables — never hardcode them
+- Add sensitive file patterns to .gitignore before writing any config files
+
+### Filesystem Safety
+
+- Never run destructive commands (`rm -rf`, `chmod -R 777`, etc.) outside the project directory
+- Never modify system files or files outside [ABSOLUTE_PATH_TO_PROJECT]
 
 <!-- GUIDANCE: Add project-specific gitignore rules:
      - Generated files (media, build artifacts)
@@ -382,6 +400,7 @@ Before doing ANYTHING else:
 
 Pick up where the last session left off. Do NOT redo existing work.
 **After every milestone, update BUILD_PROGRESS.md.**
+When ALL phases are complete, add "ALL PHASES COMPLETE" at the top.
 
 ---
 
@@ -396,12 +415,12 @@ The goal is a web-based todo list with categories, due dates, and a clean UI.
 
 ## Architecture
 
-Browser → localhost:8000
+Browser -> localhost:8000
 ├── Static files (index.html)
-├── GET  /api/todos         → list todos (filter by category, status)
-├── POST /api/todos         → create todo
-├── PUT  /api/todos/{id}    → update todo (toggle done, edit text)
-├── DELETE /api/todos/{id}  → delete todo
+├── GET  /api/todos         -> list todos (filter by category, status)
+├── POST /api/todos         -> create todo
+├── PUT  /api/todos/{id}    -> update todo (toggle done, edit text)
+├── DELETE /api/todos/{id}  -> delete todo
 └── SQLite database (todos.db)
 
 ## Build Order
@@ -415,13 +434,13 @@ Browser → localhost:8000
 ### Phase 2: CRUD
 - [ ] Implement all API endpoints
 - [ ] Build frontend: add todo form, todo list with checkboxes, delete buttons
-- [ ] Test: create todo → see it in list → check it off → delete it
+- [ ] Test: create todo -> see it in list -> check it off -> delete it
 - [ ] Docs: Update README.md, CHANGELOG.md
 
 ### Phase 3: Categories & Filtering
 - [ ] Add category selector (work, personal, errands) and due date picker
 - [ ] Add filter bar (by category, by status, by due date)
-- [ ] Test: create todos in different categories → filter → verify
+- [ ] Test: create todos in different categories -> filter -> verify
 - [ ] Docs: Update README.md, CHANGELOG.md
 
 ### Phase 4: Polish
@@ -429,12 +448,13 @@ Browser → localhost:8000
 - [ ] Responsive design (mobile-friendly)
 - [ ] Docs audit: verify quick start works from scratch
 
-## Commit Rules
+## Security & Commit Rules
 
 - Commit after each phase
-- Never mention Claude, Anthropic, or AI in commit messages
 - Never commit .env, CLAUDE.md, or .claude/
 - Use `git add <specific files>` — never `git add .`
+- Never commit secrets or API keys
+- Before every commit, scan staged changes for anything sensitive
 ```
 
 ---
@@ -447,7 +467,7 @@ Browser → localhost:8000
 
 1. **Absolute paths** — The agent runs across sessions. Relative paths break. Use `/full/path/to/project`.
 
-2. **Concrete verification steps** — "Test: create a user → log in → see dashboard" beats "test the auth system."
+2. **Concrete verification steps** — "Test: create a user -> log in -> see dashboard" beats "test the auth system."
 
 3. **Explicit tool/library choices** — Don't say "add a database." Say "use SQLite via `sqlite3` stdlib" or "use PostgreSQL via `asyncpg`."
 
@@ -463,4 +483,4 @@ Browser → localhost:8000
 
 9. **Doc requirements prevent staleness** — Requiring doc updates in every phase means you always have accurate docs, not a "we'll document it later" mess.
 
-10. **Order matters** — Foundation → Data → Primary Feature → Secondary Features → Polish → Deploy. Each phase should work independently. Never build Phase 5 features that depend on Phase 8.
+10. **Order matters** — Foundation -> Data -> Primary Feature -> Secondary Features -> Polish -> Deploy. Each phase should work independently. Never build Phase 5 features that depend on Phase 8.
