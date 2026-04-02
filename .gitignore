@@ -3,7 +3,11 @@ PROMPT.md
 BUILD_PROGRESS.md
 build-logs/
 CLAUDE.md
-.claude/
+
+# Ignore .claude/ but keep skills tracked in the repo
+.claude/*
+!.claude/skills/
+!.claude/skills/**
 
 # Environment and secrets
 .env
