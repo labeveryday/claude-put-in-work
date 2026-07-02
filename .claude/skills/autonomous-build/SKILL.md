@@ -1,89 +1,263 @@
 ---
 name: autonomous-build
-description: Converts a plan, idea, or app spec into a complete autonomous multi-session build setup that Claude Code can execute end-to-end without human intervention. Generates a structured PROMPT.md (the build spec) and build.sh (the loop runner) in the target project directory, ready to run overnight.
-argument-hint: "[project description or path to existing spec]"
+description: >
+  Converts a plan, idea, or app spec into a complete autonomous multi-session build setup
+  that Claude Code can execute end-to-end without human intervention. Generates a structured
+  PROMPT.md (the build spec) and build.sh (the loop runner) in the target project directory,
+  ready to run overnight.
+
+  Use this skill whenever the user wants to:
+  - Build an app autonomously ("build me a...", "I want to create...")
+  - Turn a plan or idea into something Claude can build on its own
+  - Set up an autonomous or overnight build
+  - Create a build spec or PROMPT.md for a project
+  - Convert a description into a phased, executable build plan
+  - Scaffold a new project for autonomous development
+
+  Also trigger when the user provides a detailed app idea, feature spec, or project description
+  and expects it to be built — even if they don't explicitly say "autonomous." If someone
+  describes what they want built and it's more than a single-session task, this skill applies.
 ---
 
-# Autonomous Build Setup
+# Autonomous Build Skill
 
-You are generating the files a user needs to run an autonomous multi-session build: `PROMPT.md` and `build.sh`.
+You are converting a user's plan into a complete autonomous build setup. The output is two files — `PROMPT.md` and `build.sh` — placed in the target project directory. Once the user runs `./build.sh`, Claude Code will execute the entire build across multiple sessions with no human intervention, using `BUILD_PROGRESS.md` as a handoff document between sessions.
 
-Use this skill whenever the user wants to:
-- Build an app autonomously ("build me a...", "I want to create...")
-- Turn a plan or idea into something Claude Code can build on its own
-- Set up an autonomous or overnight build
-- Create a build spec or PROMPT.md for a project
-- Convert a description into a phased, executable build plan
-- Scaffold a new project for autonomous development
+This is a powerful workflow: the user describes what they want, you structure it into a build plan, and Claude builds it overnight. The quality of the PROMPT.md directly determines whether the build succeeds or fails, so take the structuring seriously.
 
-Also trigger when the user provides a detailed app idea, feature spec, or project description and expects it to be built — even if they don't explicitly say "autonomous." If someone describes what they want built and it's more than a single-session task, this skill applies.
+---
 
-## Your Job
+## Step 1: Evaluate the Plan
 
-1. **Gather requirements** by asking the user about their project. Don't ask everything at once — have a conversation. Start with the big picture, then drill into specifics.
-2. **Write `PROMPT.md`** in the user's target project directory
-3. **Write `build.sh`** in the same directory
-4. **Tell the user what to do next** — review, then run
+Read whatever the user has provided — it might be a detailed spec, a rough idea, a conversation, or just a sentence like "build me a todo app."
 
-## Step 1: Gather Requirements
+Assess what you have and what's missing. You need enough information to produce a concrete, phased build plan. The critical pieces are:
 
-If the user provided a description with `$ARGUMENTS`, use that as a starting point. Otherwise, ask.
+1. **What it does** — Core functionality and user workflows
+2. **Tech stack** — Language, framework, database, frontend approach
+3. **Where it lives** — Target directory (absolute path)
+4. **How big it is** — Rough scope to determine number of phases
 
-Ask about these in order, skipping what's already clear:
+If the user gave you a rich spec, you may have everything. If they gave you a one-liner, you need to fill gaps.
 
-1. **What are you building?** — App name, what it does, who it's for
-2. **Where should it live?** — Absolute path for the project directory
-3. **Tech stack** — Language, framework, frontend approach, database, key libraries. If the user is unsure, make a recommendation based on what they're building.
-4. **Core workflows** — What can a user DO with this app? Walk through the primary flows.
-5. **Architecture** — API endpoints, data models, how pieces connect. Sketch this out with the user.
-6. **Design requirements** — Only if there's a UI. Colors, layout, component style. If the user doesn't care, skip this section entirely in the output.
-7. **Number of sessions** — How many build.sh loops? Default is 10. More phases = more sessions needed.
+## Step 2: Ask or Infer
 
-Don't ask about:
-- Commit rules (use the standard set)
-- Multi-session continuity block (always include it)
-- Documentation requirements (always include the standard set)
-- BUILD_PROGRESS.md format (standardized)
+For missing details, use this decision framework:
 
-## Step 2: Write PROMPT.md
+**Always ask about:**
+- Target directory if not specified (suggest a sensible default like `~/projects/<app-name>`)
+- Core workflows if the description is too vague to build from
+- Any ambiguity that would lead to a fundamentally wrong architecture
 
-Write `PROMPT.md` to the target project directory. Read `SAMPLE_PROMPT.md` from this repo first to follow its structure — but with ALL placeholders filled in and ALL guidance comments removed.
+**Infer reasonable defaults for (and state your assumptions):**
+- Tech stack — pick modern, well-supported defaults based on the app type:
+  - Web app: Python + FastAPI + SQLite + Vanilla JS/Tailwind CDN (simple) or Next.js + TypeScript (complex)
+  - CLI tool: Python or Go
+  - API service: Python + FastAPI or Node + Express
+- Design — clean, minimal UI unless the user specifies otherwise
+- Auth — skip unless explicitly needed
+- Deployment — local-only unless the user mentions deployment
 
-**To find the template:** Look for `SAMPLE_PROMPT.md` in the repo that contains this skill file (the `claude-put-in-work` repo). Read it before generating the output.
+**Never ask about:**
+- File structure (you'll determine this from the architecture)
+- Build phase breakdown (that's your job)
+- Commit rules (use the standard safety set)
+- Documentation approach (always include README + CHANGELOG)
 
-The output should be a clean, ready-to-run prompt with no template artifacts.
+Keep the interview short. One round of questions max. State your assumptions clearly so the user can correct them.
 
-**Critical rules for the generated PROMPT.md:**
+## Step 3: Generate PROMPT.md
 
-- Use ABSOLUTE paths everywhere (the user's project path, not relative)
-- Every phase must have concrete verification steps ("Test: do X -> see Y")
-- Each phase should be completable in one session (~1-3 hours of agent work)
-- Phase 1 is always foundation (skeleton + "it starts")
-- Final phase is always polish + verification
-- Include the multi-session continuity block at the top (with real commands for the chosen stack)
-- Include the standard commit rules and security rules
-- Include documentation requirements with per-phase checklist
-- Include the "ALL PHASES COMPLETE" instruction for BUILD_PROGRESS.md
-- Do NOT include the "Minimal Example" or "Tips" sections — those are template-only
+Build the PROMPT.md using this exact structure. Every section matters — the multi-session continuity block is what makes overnight builds work, and the phased build order is what keeps each session focused and productive.
 
-**Security rules to always include in the generated PROMPT.md:**
+```markdown
+## CRITICAL: This is a multi-session build. ALWAYS do this first.
 
-- Never commit secrets, API keys, tokens, or credentials
-- Never commit .env files
-- Before every commit, scan staged changes for secrets
-- Use `git add <specific files>` — never `git add .` or `git add -A`
-- Never use `--force` with git push
-- Never run destructive commands outside the project directory
-- If the project needs API keys, read them from environment variables, never hardcode them
+Before doing ANYTHING else, assess the current state of the project:
 
-**Phase sizing guidance:**
-- Simple app (todo, blog, calculator): 3-4 phases
-- Medium app (dashboard, CRUD with auth, API service): 5-7 phases
-- Complex app (multi-service, real-time, deployment): 8-10 phases
+1. Read BUILD_PROGRESS.md in this repo (if it exists) to see what's been completed
+2. Run `find . -name "*.<MAIN_EXTENSION>" -not -path "./.venv/*" -not -path "./node_modules/*" 2>/dev/null | head -80` and `ls -la` to see what files exist
+3. Check if the app runs: <STARTUP_COMMAND>
+4. Check if existing interfaces still work: <VERIFICATION_COMMAND>
 
-## Step 3: Write build.sh
+Based on what you find, pick up where the last session left off. Do NOT redo work that already exists and is working. If files exist and are correct, move to the next incomplete step.
 
-Write `build.sh` to the same directory. Use this exact script, only changing `MAX_RUNS` based on the number of phases (set it to number of phases + 2 to give buffer):
+**After every major milestone, update BUILD_PROGRESS.md** with:
+- What you just completed (with checkmarks)
+- What still needs to be done
+- Any issues or blockers for the next session
+- The next step to pick up on
+
+This file is your handoff to the next session. Be specific.
+
+When every phase is done and verified, write **ALL PHASES COMPLETE** at the top of BUILD_PROGRESS.md — the build runner checks for this marker and stops early instead of burning remaining sessions.
+
+---
+
+## The Mission
+
+<1-2 paragraphs: what's being built, where, and what the end state looks like>
+
+## What This App Does
+
+<Elevator pitch>
+
+### Core Workflows
+
+1. **<Workflow 1>** (Primary): <step-by-step user flow>
+2. **<Workflow 2>**: <step-by-step user flow>
+<...more as needed>
+
+## Context You Need
+
+1. **Read the existing code** in this repo to understand what already exists
+<Add references to any existing code, reference projects, or docs the agent needs>
+
+---
+
+## Tech Stack
+
+- **Language**: <specific version>
+- **Framework**: <specific framework>
+- **Frontend**: <specific approach>
+- **Database**: <specific database>
+- **Key Libraries**: <list specific packages>
+
+---
+
+## Design Requirements (if applicable)
+
+<Include only for projects with a UI. Describe layout, pages/views, and any brand/color requirements. Delete this section for CLIs and API-only services.>
+
+---
+
+## Architecture
+
+### Local Development
+
+<ASCII diagram showing how pieces connect: browser → server → endpoints → storage>
+
+### Data Models
+
+<JSON or schema showing core data structures>
+
+### Storage
+
+<Where data lives, what tables/collections exist>
+
+---
+
+## API Design (if applicable)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+<Fill in all endpoints>
+
+---
+
+## Documentation Requirements
+
+**CRITICAL: Documentation is updated EVERY phase, not at the end.**
+
+### Required Documentation Files
+
+1. **README.md** — Project overview, prerequisites, quick start, environment variables
+2. **CHANGELOG.md** — Version history by phase, using Keep a Changelog format
+
+### Documentation Checklist (run after EVERY phase)
+
+- [ ] README.md quick start commands work
+- [ ] README.md reflects the current feature set
+- [ ] CHANGELOG.md has a dated entry for this phase
+
+---
+
+## Build Order
+
+### Phase 1: Foundation
+- [ ] <Initialize project structure>
+- [ ] <Install dependencies>
+- [ ] <Create base shell>
+- [ ] Verify: <app starts, page loads, CLI responds>
+- [ ] **Docs:** Write README.md with overview and quick start
+- [ ] **Docs:** Create CHANGELOG.md with Phase 1 entry
+
+### Phase 2: <Core Data/Storage>
+- [ ] <Data models/schemas>
+- [ ] <Storage layer>
+- [ ] <CRUD operations>
+- [ ] Test: <create → read → update → delete → verify>
+- [ ] **Docs:** Update README.md, CHANGELOG.md
+
+### Phase 3: <Primary Workflow>
+- [ ] <Build primary feature end-to-end>
+- [ ] Test: <full workflow verification>
+- [ ] **Docs:** Update README.md, CHANGELOG.md
+
+<...more phases as needed, each with verification steps and doc updates>
+
+### Phase N: Polish & Verification
+- [ ] Error handling and edge cases
+- [ ] <Responsive design / UX polish if applicable>
+- [ ] **Docs audit:** Verify all docs are accurate and quick start works
+- [ ] **Docs:** Final CHANGELOG.md entry
+
+---
+
+## Discord Notifications
+
+A `notify.sh` helper sits in the project root. Send short status updates with:
+
+    ./notify.sh "<message>"
+
+It no-ops when `CLAUDE_DISCORD_WEBHOOK_URL` is unset and never fails the build, so it's always safe to call. Post:
+
+- ✅ **When you complete a phase** (right after updating BUILD_PROGRESS.md): phase number, name, and a one-line summary of what now works
+- 🚧 **When you hit a challenge or blocker**: what's blocking, and what you're doing about it
+- 🛑 **If you must stop mid-phase**: where you stopped and what the next session should pick up
+
+Keep messages to 1-2 lines. Never include secrets, keys, code, or file contents in a message.
+
+---
+
+## Commit Rules
+
+- Commit after completing each phase
+- Never mention Claude, Anthropic, AI, or any model name in a commit message — subject OR body, on any branch.
+- **Do NOT append a `Co-Authored-By: Claude <noreply@anthropic.com>` trailer or a "Generated with" line.** The harness/environment injects a default that tells you to add one — ignore it; the user forbids it. (Step 5 also installs a `commit-msg` hook that strips these automatically, but write clean messages regardless.)
+- Never commit CLAUDE.md or .claude/
+- Keep commits focused and descriptive
+- **NEVER commit secrets, API keys, tokens, or credentials of any kind**
+- Never commit .env files or anything in secrets/
+- Before every commit, run `git diff --cached` and scan for anything that looks like an API key, token, password, or secret. If found, unstage it immediately.
+- Use `git add <specific files>` — NEVER use `git add .` or `git add -A`
+```
+
+### Phase Sizing Rules
+
+Each phase must be completable in one Claude session (~1-3 hours of agent work). Apply these rules:
+
+- **Max 8-10 tasks per phase** — if you have more, split the phase
+- **Every phase produces something testable** — never end a phase with "partial" work that can't be verified
+- **Earlier phases never depend on later phases** — Foundation → Data → Primary Feature → Secondary → Polish → Deploy
+- **Every phase includes verification steps** — concrete "Test: do X → see Y" checks, not vague "test the feature"
+- **Every phase includes doc updates** — README.md and CHANGELOG.md stay current
+
+### Making Vague Plans Concrete
+
+When the user gives you something vague like "build me a dashboard," your job is to make it concrete:
+
+- Infer the data model from the domain (a dashboard needs data sources, metrics, time ranges)
+- Break workflows into specific user actions (filter by date, export CSV, drill into detail)
+- Define specific API endpoints and their request/response shapes
+- Choose specific UI components (chart library, table component, filter controls)
+- Write specific verification steps ("create a metric → see it on the dashboard → filter by last 7 days → verify the chart updates")
+
+The more specific your PROMPT.md, the better the autonomous build will go. Vague instructions lead to the agent making random choices that the user has to redo.
+
+## Step 4: Generate build.sh
+
+Create this build script in the target project directory:
 
 ```bash
 #!/bin/bash
@@ -95,9 +269,13 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-MAX_RUNS={{MAX_RUNS}}
+MAX_RUNS=10
 RUN=0
 LOG_DIR="build-logs"
+
+# Discord notifications go through notify.sh, which no-ops when
+# CLAUDE_DISCORD_WEBHOOK_URL is unset or the script is missing.
+notify() { [ -x "./notify.sh" ] && ./notify.sh "$1" || true; }
 
 # --- Pre-flight checks ---
 if [ ! -f "PROMPT.md" ]; then
@@ -108,6 +286,9 @@ fi
 
 mkdir -p "$LOG_DIR"
 
+PROJECT_NAME=$(basename "$PWD")
+BUILD_START=$(date +%s)
+
 echo "============================================"
 echo "  Autonomous Build Runner"
 echo "============================================"
@@ -115,6 +296,11 @@ echo "Max sessions: $MAX_RUNS"
 echo "Prompt:       PROMPT.md ($(wc -l < PROMPT.md | tr -d ' ') lines)"
 echo "Logs:         $LOG_DIR/"
 echo "Started:      $(date)"
+if [ -n "${CLAUDE_DISCORD_WEBHOOK_URL:-}" ]; then
+    echo "Discord:      notifications enabled"
+else
+    echo "Discord:      disabled (export CLAUDE_DISCORD_WEBHOOK_URL to enable)"
+fi
 echo "============================================"
 echo ""
 
@@ -134,6 +320,8 @@ fi
 # Clean exit on Ctrl+C
 trap 'echo ""; echo ">>> Build interrupted at session $RUN/$MAX_RUNS"; exit 130' INT
 
+notify "🚀 **$PROJECT_NAME** build started — $(date '+%a %b %d, %I:%M %p') (up to $MAX_RUNS sessions)"
+
 while [ $RUN -lt $MAX_RUNS ]; do
     RUN=$((RUN + 1))
     TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
@@ -143,30 +331,46 @@ while [ $RUN -lt $MAX_RUNS ]; do
     echo ">>> Log: $LOG_FILE"
     echo ""
 
-    cat PROMPT.md | claude --dangerously-skip-permissions 2>&1 | tee "$LOG_FILE"
+    RUN_START=$(date +%s)
+    EXIT_CODE=0
+    # With pipefail, this captures claude's exit code without tripping set -e
+    cat PROMPT.md | claude --dangerously-skip-permissions 2>&1 | tee "$LOG_FILE" || EXIT_CODE=$?
+    RUN_MINS=$(( ($(date +%s) - RUN_START) / 60 ))
 
-    EXIT_CODE=${PIPESTATUS[1]}
     echo ""
-    echo ">>> Session $RUN finished (exit $EXIT_CODE) at $(date)"
+    echo ">>> Session $RUN finished (exit $EXIT_CODE) after ${RUN_MINS}m at $(date)"
     echo ""
 
-    # Check if BUILD_PROGRESS.md indicates completion
+    # Surface the latest "Next Step" from BUILD_PROGRESS.md in the Discord feed
+    NEXT_STEP=""
     if [ -f "BUILD_PROGRESS.md" ]; then
-        if grep -qi "all phases complete\|build complete\|all.*done" BUILD_PROGRESS.md 2>/dev/null; then
-            echo ">>> BUILD_PROGRESS.md indicates build is complete. Stopping early."
-            break
-        fi
+        NEXT_STEP=$(awk '/[Nn]ext [Ss]tep/{flag=1; next} flag && NF{print; exit}' BUILD_PROGRESS.md)
     fi
 
-    # Pause between sessions
+    if [ "$EXIT_CODE" -eq 0 ]; then
+        notify "✅ **$PROJECT_NAME** session $RUN/$MAX_RUNS finished in ${RUN_MINS}m. Next: ${NEXT_STEP:-see BUILD_PROGRESS.md}"
+    else
+        notify "⚠️ **$PROJECT_NAME** session $RUN/$MAX_RUNS exited with code $EXIT_CODE after ${RUN_MINS}m — check build-logs/"
+    fi
+
+    # Stop early once BUILD_PROGRESS.md declares the build done
+    if [ -f "BUILD_PROGRESS.md" ] && grep -qi "all phases complete" BUILD_PROGRESS.md 2>/dev/null; then
+        echo ">>> BUILD_PROGRESS.md indicates build is complete. Stopping early."
+        break
+    fi
+
     if [ $RUN -lt $MAX_RUNS ]; then
         sleep 5
     fi
 done
 
+TOTAL_MINS=$(( ($(date +%s) - BUILD_START) / 60 ))
+notify "🏁 **$PROJECT_NAME** build complete — $RUN session(s) in $((TOTAL_MINS / 60))h $((TOTAL_MINS % 60))m"
+
 echo ""
 echo "============================================"
 echo "  Build finished — $RUN session(s) ran"
+echo "  Total time: $((TOTAL_MINS / 60))h $((TOTAL_MINS % 60))m"
 echo "  $(date)"
 echo "============================================"
 if [ -f "BUILD_PROGRESS.md" ]; then
@@ -176,17 +380,79 @@ if [ -f "BUILD_PROGRESS.md" ]; then
 fi
 ```
 
-Replace `{{MAX_RUNS}}` with the actual number.
+Adjust `MAX_RUNS` based on the number of phases — a good default is `number_of_phases + 3` (extra sessions for retries and polish).
 
-After writing both files, run `chmod +x build.sh` in the target directory.
+Also write `notify.sh` to the same directory (verbatim — no changes needed). It sends progress updates to Discord when `CLAUDE_DISCORD_WEBHOOK_URL` is set in the environment, and no-ops otherwise, so it's always safe to include:
 
-## Step 4: Summary
+```bash
+#!/bin/bash
+# notify.sh — send a one-line update to one or more Discord webhooks.
+#
+# Usage:   ./notify.sh "your message"
+# Setup:   export CLAUDE_DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."
+#          For multiple channels, comma-separate the URLs (every message goes to all):
+#          export CLAUDE_DISCORD_WEBHOOK_URL="https://...hook1,https://...hook2"
+#
+# No-ops silently if CLAUDE_DISCORD_WEBHOOK_URL is unset, so it's safe to call
+# unconditionally from build.sh and from inside a build session.
 
-After writing both files, tell the user:
+set -euo pipefail
 
-1. Where the files were written
-2. How many phases and sessions are configured
-3. Suggest they review `PROMPT.md` — especially the tech stack, architecture, and phase breakdown
-4. Tell them to run: `cd <project-path> && ./build.sh`
-5. Remind them they can check progress in `BUILD_PROGRESS.md` and logs in `build-logs/`
-6. Remind them to review `build-logs/` and `git log` after the build for any issues
+WEBHOOKS="${CLAUDE_DISCORD_WEBHOOK_URL:-}"
+[ -z "$WEBHOOKS" ] && exit 0
+
+MESSAGE="${1:-}"
+[ -z "$MESSAGE" ] && exit 0
+
+# Discord caps message content at 2000 chars — trim with headroom.
+MESSAGE=$(printf '%s' "$MESSAGE" | head -c 1900)
+
+# JSON-escape: backslash, double-quote, then newlines -> \n
+ESCAPED=$(printf '%s' "$MESSAGE" \
+    | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' \
+    | awk 'BEGIN{ORS="\\n"} {print}' | sed 's/\\n$//')
+
+# Fan out to every comma-separated webhook; one failure doesn't block the rest.
+IFS=',' read -ra HOOKS <<< "$WEBHOOKS"
+for HOOK in "${HOOKS[@]}"; do
+    HOOK=$(printf '%s' "$HOOK" | tr -d '[:space:]')
+    [ -z "$HOOK" ] && continue
+    curl -sf -H "Content-Type: application/json" \
+        -d "{\"content\": \"${ESCAPED}\"}" \
+        "$HOOK" >/dev/null || echo "notify.sh: Discord post failed for $HOOK" >&2
+done
+```
+
+## Step 5: Set Up the Project
+
+1. Create the target directory if it doesn't exist
+2. Initialize git if not already a repo
+3. Write `PROMPT.md`, `build.sh`, and `notify.sh` to the project directory
+4. Run `chmod +x build.sh notify.sh`
+5. Create a `.gitignore` that excludes: `build-logs/`, `BUILD_PROGRESS.md`, `PROMPT.md`, `CLAUDE.md`, `.claude/`, `.env`, `node_modules/`, `__pycache__/`, `.venv/`
+6. **Install a `commit-msg` hook that strips AI attribution mechanically** (headless `--dangerously-skip-permissions` sessions follow the harness's Co-Authored-By default no matter what PROMPT.md says, so a text rule alone is not enough). Write this to `.git/hooks/commit-msg` and `chmod +x` it:
+
+   ```sh
+   #!/bin/sh
+   # Strip any AI/Claude/Anthropic attribution (incl. Co-Authored-By trailers) from
+   # every commit message, regardless of what the headless session wrote. The 🤖
+   # "Generated with [Claude Code]" line is caught by the "claude" pattern.
+   f="$1"
+   grep -viE 'co-authored-by:|anthropic|claude|🤖' "$f" > "$f.clean" && mv "$f.clean" "$f"
+   ```
+
+   If the project sets `core.hooksPath`, install it there instead; and have `build.sh` re-assert the hook at the top of each run (hooks live in `.git/`, so they are not restored by a fresh clone).
+7. Tell the user exactly how to start: `cd <project-dir> && ./build.sh`
+
+## Step 6: Present the Summary
+
+After generating everything, give the user a clear summary:
+
+1. **What you built** — brief description of the app
+2. **Assumptions made** — tech stack choices, architecture decisions
+3. **Phase breakdown** — list of phases with estimated scope
+4. **How to run** — the exact command to start the autonomous build
+5. **How to monitor** — check `BUILD_PROGRESS.md` and `build-logs/`; if `CLAUDE_DISCORD_WEBHOOK_URL` is set, Discord gets the build start (with time), per-session results with the next step, phase completions, blockers, and total duration. Discord is opt-in: create a webhook (Server Settings → Integrations → Webhooks → New Webhook → Copy URL) and `export CLAUDE_DISCORD_WEBHOOK_URL="..."` before running; comma-separate URLs to post to several channels. Unset, the build runs exactly the same.
+6. **How to customize** — edit `PROMPT.md` before running if anything needs changing
+
+Ask the user to review the PROMPT.md before running — it's much easier to fix the spec than to fix a half-built app.

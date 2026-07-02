@@ -56,6 +56,17 @@ fetching works but the chart library isn't rendering. Then move to Settings page
 
 **When ALL phases are complete**, add "ALL PHASES COMPLETE" at the top of BUILD_PROGRESS.md so the build runner can stop early.
 
+### Progress Notifications
+
+After you update BUILD_PROGRESS.md for a completed phase — and whenever you hit a blocker you can't resolve — send a one-line update to Discord:
+
+```
+./notify.sh "✅ Phase 2 complete: CRUD endpoints working"
+./notify.sh "🚧 Blocked: database migration fails — details in BUILD_PROGRESS.md"
+```
+
+`notify.sh` no-ops when `CLAUDE_DISCORD_WEBHOOK_URL` is unset, so it's always safe to call. To enable notifications, create a Discord webhook (Server Settings → Integrations → Webhooks → New Webhook → Copy URL) and `export CLAUDE_DISCORD_WEBHOOK_URL="..."` before running `build.sh`. To post to several channels at once, comma-separate the webhook URLs.
+
 ---
 
 ## The Mission
