@@ -1,0 +1,11 @@
+# Build reviewer agent
+strands-agents
+strands-agents[anthropic]
+python-dotenv
+discord.py
+
+# Screenshots of the running app (also run: playwright install chromium)
+playwright
+
+# Optional - uncomment for S3-backed hub storage (USE_S3=true)
+# boto3

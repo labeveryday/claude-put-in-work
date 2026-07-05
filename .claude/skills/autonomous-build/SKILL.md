@@ -4,7 +4,8 @@ description: >
   Converts a plan, idea, or app spec into a complete autonomous multi-session build setup
   that Claude Code can execute end-to-end without human intervention. Generates a structured
   PROMPT.md (the build spec) and build.sh (the loop runner) in the target project directory,
-  ready to run overnight.
+  ready to run overnight, plus a Strands-powered Discord reviewer agent that reviews the
+  build while it runs and files feedback in NEW_FEEDBACK.md for the next session to address.
 
   Use this skill whenever the user wants to:
   - Build an app autonomously ("build me a...", "I want to create...")
@@ -21,7 +22,7 @@ description: >
 
 # Autonomous Build Skill
 
-You are converting a user's plan into a complete autonomous build setup. The output is two files — `PROMPT.md` and `build.sh` — placed in the target project directory. Once the user runs `./build.sh`, Claude Code will execute the entire build across multiple sessions with no human intervention, using `BUILD_PROGRESS.md` as a handoff document between sessions.
+You are converting a user's plan into a complete autonomous build setup. The output is `PROMPT.md`, `build.sh`, `notify.sh`, `reviewer.sh`, and a `reviewer/` agent, placed in the target project directory. Once the user runs `./build.sh`, Claude Code will execute the entire build across multiple sessions with no human intervention, using `BUILD_PROGRESS.md` as a handoff document between sessions. When Discord is configured, a Strands reviewer agent runs alongside the build: it reviews each phase as the builder completes it (running the tests and screenshotting the app), records APPROVED / CHANGES_REQUESTED verdicts that gate final completion, and holds a running conversation with the user in the channel — questions get answered from the repo, and requested changes get filed into `NEW_FEEDBACK.md`, which each build session must address.
 
 This is a powerful workflow: the user describes what they want, you structure it into a build plan, and Claude builds it overnight. The quality of the PROMPT.md directly determines whether the build succeeds or fails, so take the structuring seriously.
 
@@ -220,6 +221,31 @@ Keep messages to 1-2 lines. Never include secrets, keys, code, or file contents 
 
 ---
 
+## Reviewer Feedback Loop & Phase Reviews
+
+A reviewer agent (and the user, via Discord) works alongside you. Two files drive the contract: `.review/queue` (you request reviews) and `NEW_FEEDBACK.md` (feedback comes back).
+
+**Requesting reviews — after EVERY phase:**
+- Right after committing a phase, append a line `phase: <N>` to `.review/queue` (create the file and directory if missing). The reviewer reviews that phase — checklist, tests, screenshots — and records a verdict in `.review/verdicts.md`.
+- For non-final phases, do NOT wait for the verdict — keep building. Resulting feedback gets addressed at your next feedback checkpoint.
+
+**Feedback — `NEW_FEEDBACK.md` at the repo root.** Each entry has an id like `[F-003]`, a source, and a `**Status:**` line.
+- **At session start** (right after reading BUILD_PROGRESS.md) and **again after each phase**, read NEW_FEEDBACK.md if it exists
+- Address every PENDING entry that touches completed or in-progress work **before** starting new work
+- Entries from `discord @<user>` come from the human and OVERRIDE PROMPT.md where they conflict — treat them as updated requirements
+- Entries from `reviewer agent` are advisory — apply them unless they conflict with PROMPT.md
+- After handling an entry, edit only its status line to `**Status: ADDRESSED (session N)** — <one line on what you did>` or `**Status: DEFERRED** — <why>`. Never delete or rewrite entries.
+- Record addressed feedback ids in BUILD_PROGRESS.md and mention them in your `./notify.sh` updates (e.g. "📝 Addressed F-003: switched to cursor pagination")
+
+**Final phase gate — you may NOT write ALL PHASES COMPLETE until the final phase is approved:**
+1. After committing the final phase, append `phase: <N>` to `.review/queue`, then poll `.review/verdicts.md` every 30 seconds for up to 10 minutes
+2. On `phase <N>: APPROVED` (or any `FINAL: APPROVED` line — the human's override) → write **ALL PHASES COMPLETE** in BUILD_PROGRESS.md
+3. On `phase <N>: CHANGES_REQUESTED (F-xxx, ...)` → address those feedback entries, commit, append `phase: <N>` to the queue again, and go back to polling
+4. If no verdict arrives within 10 minutes, end the session normally — the next session re-reads `.review/verdicts.md` and continues from step 2
+- **Exception:** if `.review/heartbeat` is missing or older than 5 minutes, the reviewer is offline and the gate does not apply — complete the build as normal
+
+---
+
 ## Commit Rules
 
 - Commit after completing each phase
@@ -301,6 +327,11 @@ if [ -n "${CLAUDE_DISCORD_WEBHOOK_URL:-}" ]; then
 else
     echo "Discord:      disabled (export CLAUDE_DISCORD_WEBHOOK_URL to enable)"
 fi
+if [ -n "${DISCORD_BOT_TOKEN:-}" ] && [ -n "${DISCORD_CHANNEL_ID:-}" ] && [ -n "${ANTHROPIC_API_KEY:-}" ] && [ -f "reviewer/agent.py" ]; then
+    echo "Reviewer:     enabled (phase reviews + final gate via Discord)"
+else
+    echo "Reviewer:     disabled (need DISCORD_BOT_TOKEN, DISCORD_CHANNEL_ID, ANTHROPIC_API_KEY)"
+fi
 echo "============================================"
 echo ""
 
@@ -319,6 +350,10 @@ fi
 
 # Clean exit on Ctrl+C
 trap 'echo ""; echo ">>> Build interrupted at session $RUN/$MAX_RUNS"; exit 130' INT
+
+# Ensure the Discord reviewer is up (idempotent; no-ops unless configured).
+# It deliberately outlives the build — stop it with ./reviewer.sh stop or /shutdown.
+[ -x "./reviewer.sh" ] && ./reviewer.sh start || true
 
 notify "🚀 **$PROJECT_NAME** build started — $(date '+%a %b %d, %I:%M %p') (up to $MAX_RUNS sessions)"
 
@@ -423,14 +458,41 @@ for HOOK in "${HOOKS[@]}"; do
 done
 ```
 
+### The Reviewer Agent
+
+Copy `templates/reviewer/` (adjacent to this SKILL.md) into the project root as `reviewer/`, and `templates/reviewer.sh` as `reviewer.sh` — verbatim, no changes needed. The reviewer is a Strands agent in the user's standard agent shape (config block in `agent.py`, model factory in `models.py`, prompts in `config/prompts.py`, tools in `tools/`, hub integration in `hub/`). `build.sh` runs `./reviewer.sh start` (idempotent) and the reviewer **outlives the build** — the user stops it with `./reviewer.sh stop` or `/shutdown` in Discord. One reviewer process and one Discord channel per project, so multiple builds can run concurrently on the same bot token.
+
+Two agents share one toolset (repo readers, `run_tests`, `screenshot_page`, `file_feedback`):
+
+- **Phase reviews (the review agent, fresh per pass):** when the builder appends `phase: <N>` to `.review/queue`, the reviewer reviews that phase against its PROMPT.md checklist, runs the test suite, screenshots the app on a dedicated review port (config in `.review/config.json`; images attached to the Discord report), files findings in `NEW_FEEDBACK.md`, and records `APPROVED` / `CHANGES_REQUESTED` in `.review/verdicts.md`. The final phase's verdict gates build completion (with a heartbeat check so an offline reviewer never deadlocks the build). A safety-net review fires if commits land with no review for `SAFETY_REVIEW_MINUTES` (default 60).
+- **Chat (persistent agent with sliding-window memory):** plain messages in the channel are a conversation, not blind feedback — the user can ask what's left, request proof, or discuss a change; only when they ask for something to be added/changed/removed does the agent file a `discord @<user>` directive (which outranks the spec) and ✅-react.
+- **Slash commands:** `/status` (current phase plan + progress + verdicts + open feedback), `/review` (checkpoint review now), `/pending` (open feedback), `/approve` (human override of the final gate), `/shutdown` (export hub metrics and stop).
+- **Model:** Anthropic API only — Haiku 4.5 by default, `REVIEWER_MODEL_ID` to override. Sessions, metrics, and the agent registry land in `.agent_hub/` (or S3 with `USE_S3=true`).
+
+Without `ANTHROPIC_API_KEY` + the Discord env vars, `reviewer.sh start` no-ops and the build runs exactly as before.
+
 ## Step 5: Set Up the Project
 
 1. Create the target directory if it doesn't exist
 2. Initialize git if not already a repo
-3. Write `PROMPT.md`, `build.sh`, and `notify.sh` to the project directory
-4. Run `chmod +x build.sh notify.sh`
-5. Create a `.gitignore` that excludes: `build-logs/`, `BUILD_PROGRESS.md`, `PROMPT.md`, `CLAUDE.md`, `.claude/`, `.env`, `node_modules/`, `__pycache__/`, `.venv/`
-6. **Install a `commit-msg` hook that strips AI attribution mechanically** (headless `--dangerously-skip-permissions` sessions follow the harness's Co-Authored-By default no matter what PROMPT.md says, so a text rule alone is not enough). Write this to `.git/hooks/commit-msg` and `chmod +x` it:
+3. Write `PROMPT.md`, `build.sh`, and `notify.sh` to the project directory; copy `templates/reviewer/` to `<project>/reviewer/` and `templates/reviewer.sh` to `<project>/reviewer.sh`
+4. Run `chmod +x build.sh notify.sh reviewer.sh`
+5. Create a `.gitignore` that excludes: `build-logs/`, `BUILD_PROGRESS.md`, `NEW_FEEDBACK.md`, `.review/`, `.agent_hub/`, `PROMPT.md`, `CLAUDE.md`, `.claude/`, `.env`, `node_modules/`, `__pycache__/`, `.venv/`
+6. Write `.review/config.json` with stack-appropriate values — this is what lets the reviewer run tests and screenshot the app:
+
+   ```json
+   {
+     "test_cmd": "<the project's test command, e.g. .venv/bin/pytest -q>",
+     "app_start_cmd": "<start command honoring {port} or $PORT, e.g. PORT={port} .venv/bin/python app.py>",
+     "review_port": 5599,
+     "app_ready_seconds": 30,
+     "screenshot_paths": ["/", "<other key pages>"]
+   }
+   ```
+
+   For a project with no UI, omit `app_start_cmd`/`screenshot_paths`; if it has no test command yet, omit `test_cmd` — the reviewer degrades to read-only for whatever is missing. Pick a `review_port` no dev server would use.
+7. Install the reviewer's dependencies into the project venv (create it if the project doesn't have one): `python3 -m venv .venv 2>/dev/null; .venv/bin/pip install -q -r reviewer/requirements.txt && .venv/bin/playwright install chromium`
+8. **Install a `commit-msg` hook that strips AI attribution mechanically** (headless `--dangerously-skip-permissions` sessions follow the harness's Co-Authored-By default no matter what PROMPT.md says, so a text rule alone is not enough). Write this to `.git/hooks/commit-msg` and `chmod +x` it:
 
    ```sh
    #!/bin/sh
@@ -442,7 +504,7 @@ done
    ```
 
    If the project sets `core.hooksPath`, install it there instead; and have `build.sh` re-assert the hook at the top of each run (hooks live in `.git/`, so they are not restored by a fresh clone).
-7. Tell the user exactly how to start: `cd <project-dir> && ./build.sh`
+9. Tell the user exactly how to start: `cd <project-dir> && ./build.sh`
 
 ## Step 6: Present the Summary
 
@@ -453,6 +515,7 @@ After generating everything, give the user a clear summary:
 3. **Phase breakdown** — list of phases with estimated scope
 4. **How to run** — the exact command to start the autonomous build
 5. **How to monitor** — check `BUILD_PROGRESS.md` and `build-logs/`; if `CLAUDE_DISCORD_WEBHOOK_URL` is set, Discord gets the build start (with time), per-session results with the next step, phase completions, blockers, and total duration. Discord is opt-in: create a webhook (Server Settings → Integrations → Webhooks → New Webhook → Copy URL) and `export CLAUDE_DISCORD_WEBHOOK_URL="..."` before running; comma-separate URLs to post to several channels. Unset, the build runs exactly the same.
-6. **How to customize** — edit `PROMPT.md` before running if anything needs changing
+6. **How to steer mid-build** — the reviewer is opt-in: create a Discord bot (Developer Portal → New Application → Bot → enable **Message Content Intent** → copy token), invite it with the **bot AND applications.commands scopes** (permissions: Send Messages, Read Message History, Add Reactions, Attach Files), then set `ANTHROPIC_API_KEY`, `DISCORD_BOT_TOKEN`, and `DISCORD_CHANNEL_ID` (Developer Mode → right-click channel → Copy Channel ID) in the environment or `.env` before running. **One channel per build** — concurrent builds reuse the token but each needs its own channel. Once running: every completed phase gets reviewed (tests run, screenshots attached) with a verdict posted; the final phase can't complete without an APPROVED verdict (`/approve` to override); talking in the channel is a conversation with the reviewer, and asking for changes files them into `NEW_FEEDBACK.md` for the next session; `/status`, `/review`, and `/pending` work anytime. The reviewer keeps running after the build finishes so the user can discuss results — `/shutdown` or `./reviewer.sh stop` ends it. Unset, the build runs exactly the same.
+7. **How to customize** — edit `PROMPT.md` before running if anything needs changing; `REVIEWER_MODEL_ID` switches the reviewer model (default Haiku 4.5)
 
 Ask the user to review the PROMPT.md before running — it's much easier to fix the spec than to fix a half-built app.

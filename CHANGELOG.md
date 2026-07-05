@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.0.0] - 2026-07-05
+
+v3: the build gets a supervisor. A Strands-powered reviewer agent runs alongside the build loop, reviews every phase, and holds the final phase to an approval gate — all from a Discord channel you can talk to.
+
+### Added
+- `reviewer/` — Strands agent (Discord bot) with two roles sharing one toolset:
+  - Phase reviews: when the builder appends `phase: N` to `.review/queue`, the reviewer checks the phase against its `PROMPT.md` checklist, runs the test suite, screenshots the app with Playwright on a dedicated review port, posts the report + images to Discord, and records `APPROVED` / `CHANGES_REQUESTED` in `.review/verdicts.md`
+  - Chat: plain channel messages hit a persistent agent with sliding-window memory that reads the repo, runs tests, and screenshots on demand; requested changes are filed as directives that outrank the spec
+- Final-phase approval gate — the build cannot write `ALL PHASES COMPLETE` until the last phase has an `APPROVED` verdict; a heartbeat check keeps an offline reviewer from ever blocking a build
+- Slash commands: `/status` (phase plan + remaining tasks + verdicts + open feedback), `/review`, `/pending`, `/approve` (human gate override), `/shutdown`
+- `NEW_FEEDBACK.md` feedback ledger — numbered entries with PENDING/ADDRESSED/DEFERRED status; build sessions address open entries before new work
+- `reviewer.sh` — `start | stop | status` with a pidfile; `start` is idempotent and no-ops when unconfigured
+- Safety-net review when commits land with no review for `SAFETY_REVIEW_MINUTES` (default 60)
+- `.review/config.json` — per-project test command, app start command, review port, and screenshot paths; the reviewer degrades to read-only when values are omitted
+- Hub observability — per-project agent registry, per-run sessions, and metrics in `.agent_hub/` (S3 optional via `USE_S3`)
+- `reviewer/.env.example` documenting all reviewer configuration
+- Reviewer Feedback Loop & Phase Reviews section in `SAMPLE_PROMPT.md` defining the builder↔reviewer file contract
+- Multi-build support — one reviewer process and one Discord channel per project on a shared bot token
+
+### Changed
+- `build.sh` now starts the reviewer via `./reviewer.sh start` and reports reviewer status in the pre-flight header; the reviewer deliberately outlives the build so you can discuss results after it finishes
+- `/autonomous-build` skill generates the reviewer, `reviewer.sh`, and `.review/config.json` alongside `PROMPT.md` and `build.sh`
+- `.gitignore` covers the new runtime state (`.review/`, `.agent_hub/`, `NEW_FEEDBACK.md`) while keeping placeholder `.env.example` files tracked
+- README restructured around the plan → build → review flow
+
+### Security
+- The reviewer's file-reading tool blocks `.env*`, `secrets/`, and `.git`, and its only write paths are two append-only ledgers — repo contents can't leak into Discord and the reviewer can't modify code
+
 ## [0.3.0] - 2026-04-02
 
 ### Added

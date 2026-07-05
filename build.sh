@@ -43,6 +43,11 @@ if [ -n "${CLAUDE_DISCORD_WEBHOOK_URL:-}" ]; then
 else
     echo "Discord:      disabled (export CLAUDE_DISCORD_WEBHOOK_URL to enable)"
 fi
+if [ -n "${DISCORD_BOT_TOKEN:-}" ] && [ -n "${DISCORD_CHANNEL_ID:-}" ] && [ -n "${ANTHROPIC_API_KEY:-}" ] && [ -f "reviewer/agent.py" ]; then
+    echo "Reviewer:     enabled (phase reviews + final gate via Discord)"
+else
+    echo "Reviewer:     disabled (need DISCORD_BOT_TOKEN, DISCORD_CHANNEL_ID, ANTHROPIC_API_KEY)"
+fi
 echo "============================================"
 echo ""
 
@@ -61,6 +66,10 @@ fi
 
 # Clean exit on Ctrl+C
 trap 'echo ""; echo ">>> Build interrupted at session $RUN/$MAX_RUNS"; exit 130' INT
+
+# Ensure the Discord reviewer is up (idempotent; no-ops unless configured).
+# It deliberately outlives the build — stop it with ./reviewer.sh stop or /shutdown.
+[ -x "./reviewer.sh" ] && ./reviewer.sh start || true
 
 notify "🚀 **$PROJECT_NAME** build started — $(date '+%a %b %d, %I:%M %p') (up to $MAX_RUNS sessions)"
 

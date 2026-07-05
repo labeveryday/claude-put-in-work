@@ -360,6 +360,37 @@ Before marking a phase complete in BUILD_PROGRESS.md, verify:
 
 ---
 
+## Reviewer Feedback Loop & Phase Reviews
+
+<!-- GUIDANCE: Keep this section if you run the Discord reviewer agent
+     (reviewer.sh). It defines the contract between the build sessions and
+     the reviewer: phase-review requests via .review/queue, feedback via
+     NEW_FEEDBACK.md, and the final-phase approval gate. Delete the section
+     if you build without the reviewer. -->
+
+A reviewer agent (and you, via Discord) works alongside the build. Two files drive the contract: `.review/queue` (the builder requests reviews) and `NEW_FEEDBACK.md` (feedback comes back).
+
+**Requesting reviews — after EVERY phase:**
+- Right after committing a phase, append a line `phase: <N>` to `.review/queue` (create the file and directory if missing). The reviewer reviews that phase — checklist, tests, screenshots — and records a verdict in `.review/verdicts.md`.
+- For non-final phases, do NOT wait for the verdict — keep building. Resulting feedback gets addressed at the next feedback checkpoint.
+
+**Feedback — `NEW_FEEDBACK.md` at the repo root.** Each entry has an id like `[F-003]`, a source, and a `**Status:**` line.
+- At session start (right after reading BUILD_PROGRESS.md) and again after each phase, read NEW_FEEDBACK.md if it exists
+- Address every PENDING entry that touches completed or in-progress work before starting new work
+- Entries from `discord @<user>` come from the human and OVERRIDE this prompt where they conflict — treat them as updated requirements
+- Entries from `reviewer agent` are advisory — apply them unless they conflict with this prompt
+- After handling an entry, edit only its status line to `**Status: ADDRESSED (session N)** — <one line>` or `**Status: DEFERRED** — <why>`. Never delete or rewrite entries.
+- Record addressed ids in BUILD_PROGRESS.md and mention them in `./notify.sh` updates
+
+**Final phase gate — you may NOT write ALL PHASES COMPLETE until the final phase is approved:**
+1. After committing the final phase, append `phase: <N>` to `.review/queue`, then poll `.review/verdicts.md` every 30 seconds for up to 10 minutes
+2. On `phase <N>: APPROVED` (or any `FINAL: APPROVED` line — the human's override) → write **ALL PHASES COMPLETE** in BUILD_PROGRESS.md
+3. On `phase <N>: CHANGES_REQUESTED (F-xxx, ...)` → address those feedback entries, commit, append `phase: <N>` to the queue again, and go back to polling
+4. If no verdict arrives within 10 minutes, end the session normally — the next session re-reads `.review/verdicts.md` and continues from step 2
+- **Exception:** if `.review/heartbeat` is missing or older than 5 minutes, the reviewer is offline and the gate does not apply — complete the build as normal
+
+---
+
 ## Security & Commit Rules
 
 <!-- GUIDANCE: These rules prevent common autonomous build mistakes.

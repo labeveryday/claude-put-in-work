@@ -1,17 +1,27 @@
 # claude-put-in-work — session-specific files (never commit these)
 PROMPT.md
 BUILD_PROGRESS.md
+NEW_FEEDBACK.md
 build-logs/
 CLAUDE.md
+
+# Reviewer runtime state (queue, verdicts, screenshots, pid) and agent hub data
+.review/
+.agent_hub/
+
+# Python
+.venv/
+__pycache__/
 
 # Ignore .claude/ but keep skills tracked in the repo
 .claude/*
 !.claude/skills/
 !.claude/skills/**
 
-# Environment and secrets
+# Environment and secrets (the placeholder .env.example templates stay tracked)
 .env
 .env.*
+!**/.env.example
 *.key
 *.pem
 
