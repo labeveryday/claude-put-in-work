@@ -2,6 +2,10 @@
 
 A framework for autonomous, multi-session app building with Claude Code. Describe what you want built, run `build.sh`, and let Claude build it end-to-end — overnight if you want. In v3, a Strands-powered reviewer agent watches the build from Discord: it reviews every phase, runs the tests, screenshots the app, and holds the final phase to an approval gate — while you steer the build from your phone.
 
+![The autonomous build loop: a planner terminal writes the spec, a builder terminal runs it phase by phase, a reviewer agent watches from Discord, and the planner reviews the finished build — appending new phases until it is good enough.](assets/build-loop.png)
+
+<sub>The diagram is drawn from [`assets/build-loop.html`](assets/build-loop.html) — edit the HTML and re-screenshot to keep it truthful.</sub>
+
 ## How It Works
 
 ```

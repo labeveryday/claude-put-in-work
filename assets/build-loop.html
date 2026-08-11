@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Autonomous build loop</title>
+<style>
+  :root {
+    --ink: #1c1917;
+    --blue: #3b74d1; --blue-fill: #f2f7ff;
+    --purple: #8b5cf6; --purple-fill: #f7f3ff;
+    --orange: #e08a2e; --orange-fill: #fff8ee;
+    --green: #3f9d63; --green-fill: #f1faf3;
+    --pink: #d5566b; --pink-fill: #fdf3f5;
+    --gold: #b58a2a; --gold-fill: #fdf9ec;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #fdfcfa; font-family: "Chalkboard SE", "Comic Sans MS", cursive; color: var(--ink); }
+  #canvas { position: relative; width: 1980px; height: 1470px; overflow: hidden; }
+
+  .title { position: absolute; top: 22px; left: 0; width: 100%; text-align: center; font-size: 44px; font-weight: 700; }
+  .subtitle { position: absolute; top: 84px; left: 0; width: 100%; text-align: center; font-size: 24px; color: #57534e; }
+
+  .box { position: absolute; border: 3px solid; border-radius: 18px; padding: 14px 16px; }
+  .box h2 { font-size: 23px; text-align: center; margin-bottom: 10px; line-height: 1.25; }
+  .box .sub { font-size: 16px; text-align: center; margin-top: -8px; margin-bottom: 10px; color: #57534e; }
+
+  .pill { border: 2.5px solid; border-radius: 12px; padding: 7px 10px; margin: 8px 0; font-size: 17.5px; text-align: center; background: #fff; line-height: 1.3; }
+  .pill.small { font-size: 15.5px; padding: 5px 8px; display: inline-block; margin: 4px 3px; }
+  .caption { text-align: center; font-size: 20px; font-weight: 700; margin-top: 10px; }
+  ul { list-style: none; }
+  ul li { font-size: 16.5px; margin: 7px 0 7px 2px; line-height: 1.3; padding-left: 16px; position: relative; }
+  ul li::before { content: "•"; position: absolute; left: 0; }
+
+  .t1 { left: 42px; top: 148px; width: 452px; height: 902px; border-color: var(--blue); background: var(--blue-fill); display: flex; flex-direction: column; justify-content: space-between; }
+  .t1 .pill { border-color: var(--blue); }
+  .t1 .caption { color: var(--blue); }
+  .team { border: 2.5px solid var(--blue); border-radius: 12px; margin: 8px 0; padding: 6px 8px 8px; background: #fff; text-align: center; }
+  .team .head { font-size: 17.5px; margin-bottom: 2px; }
+
+  .repo { left: 620px; top: 168px; width: 372px; height: 452px; border-color: var(--purple); background: var(--purple-fill); }
+  .repo .inner { border: 2.5px solid var(--purple); border-radius: 14px; background: #fff; padding: 12px 14px; margin-top: 6px; }
+  .repo .inner h3 { font-size: 20px; text-align: center; margin-bottom: 8px; }
+  .repo .inner .lead { font-size: 17px; margin: 2px 0 2px 6px; }
+  .repo .note { text-align: center; font-size: 17.5px; margin-top: 14px; color: #44403c; }
+
+  .grandma { left: 620px; top: 742px; width: 372px; height: 262px; border-color: var(--pink); background: var(--pink-fill); }
+  .grandma .lead { text-align: center; font-size: 17.5px; margin-bottom: 4px; }
+
+  .t2 { left: 1112px; top: 148px; width: 440px; height: 902px; border-color: var(--orange); background: var(--orange-fill); display: flex; flex-direction: column; justify-content: space-between; }
+  .t2 .chips { text-align: center; margin-bottom: 2px; }
+  .t2 .pill { border-color: var(--orange); }
+  .t2 .step { margin: 0; }
+  .t2 .darr { text-align: center; font-size: 19px; line-height: 1.05; color: var(--ink); }
+  .t2 .caption { color: var(--orange); }
+
+  .reviewer { left: 1660px; top: 236px; width: 288px; height: 420px; border-color: var(--green); background: var(--green-fill); }
+  .discord { left: 1682px; top: 748px; width: 244px; height: 176px; border-color: var(--green); background: var(--green-fill); }
+  .discord h2 { margin-bottom: 4px; }
+
+  .user { position: absolute; left: 1716px; top: 1010px; width: 176px; height: 140px; border: 3px solid var(--ink); border-radius: 16px; background: #fff; text-align: center; padding-top: 12px; }
+  .user .glyph { font-size: 44px; line-height: 1; }
+  .user .label { font-size: 20px; font-weight: 700; margin-top: 6px; }
+
+  .plain { border-color: var(--gold); background: var(--gold-fill); text-align: center; font-size: 21px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .completed { left: 1152px; top: 1148px; width: 300px; height: 78px; }
+  .phases { left: 902px; top: 1310px; width: 296px; height: 92px; font-size: 19px; line-height: 1.3; }
+  .done { left: 118px; top: 1268px; width: 190px; height: 80px; border-color: var(--green); background: var(--green-fill); }
+
+  .diamond { position: absolute; left: 552px; top: 1218px; width: 190px; height: 190px; }
+  .diamond .shape { position: absolute; inset: 0; transform: rotate(45deg); border: 3px solid var(--gold); border-radius: 16px; background: var(--gold-fill); }
+  .diamond .words { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 21px; font-weight: 700; text-align: center; line-height: 1.2; }
+
+  .note { position: absolute; font-size: 17.5px; color: #44403c; }
+
+  svg.wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  svg.wires path, svg.wires line { fill: none; stroke: var(--ink); stroke-width: 3; }
+  svg.wires .dashed { stroke-dasharray: 9 8; }
+  svg.wires .pinkdash { stroke: var(--pink); stroke-dasharray: 9 8; }
+  svg.wires text { font-family: "Chalkboard SE", "Comic Sans MS", cursive; font-size: 18px; fill: var(--ink); stroke: none; }
+</style>
+</head>
+<body>
+<div id="canvas">
+  <div class="title">Fable 5 + Opus 5 Autonomous Build Loop</div>
+  <div class="subtitle">Planning in Terminal 1 &middot; Building in Terminal 2</div>
+
+  <div class="box t1">
+    <h2>Terminal 1 — Fable 5<br>(Ultra Code)</h2>
+    <div class="pill">High-level planning</div>
+    <div class="pill">Discuss app idea + trade-offs</div>
+    <div class="pill">Break work apart</div>
+    <div class="team">
+      <div class="head">Can create expert team</div>
+      <span class="pill small">Security</span><span class="pill small">Cloud Architecture</span>
+      <span class="pill small">AI Engineering</span><span class="pill small">etc.</span>
+    </div>
+    <div class="pill">Creates autonomous build plan<br>in phases</div>
+    <div class="pill">After build: reviews completed work</div>
+    <div class="pill">If needed: creates new phases<br>(ex: 8&ndash;12)</div>
+    <div class="caption">Fable 5 = great planner</div>
+  </div>
+
+  <div class="box repo">
+    <h2>Repo: Claude Put In Work</h2>
+    <div class="inner">
+      <h3>Skill: Autonomous Build</h3>
+      <div class="lead">Creates:</div>
+      <ul>
+        <li>PROMPT.md</li>
+        <li>build.sh</li>
+        <li>reviewer agent</li>
+      </ul>
+    </div>
+    <div class="note" style="position:static">Uses the CLI to trigger<br>Claude Code</div>
+  </div>
+
+  <div class="box grandma">
+    <h2>Grandma Skill</h2>
+    <div class="lead">Acts like a grandma testing the app</div>
+    <ul>
+      <li>Checks if the UI is easy to use</li>
+      <li>Finds confusing UX</li>
+      <li>Returns usability feedback</li>
+    </ul>
+  </div>
+
+  <div class="box t2">
+    <h2>Terminal 2 — Claude Code Worker</h2>
+    <div class="chips">
+      <span class="pill small">Model: Opus 5</span><span class="pill small">Effort: Max</span>
+      <span class="pill small">--dangerously-skip-permissions</span>
+    </div>
+    <div class="pill step">Run build.sh</div>
+    <div class="darr">&darr;</div>
+    <div class="pill step">Read PROMPT.md</div>
+    <div class="darr">&darr;</div>
+    <div class="pill step">Execute phased build</div>
+    <div class="darr">&darr;</div>
+    <div class="pill step">Work through phases 1 &rarr; 7<br>(example)</div>
+    <div class="darr">&darr;</div>
+    <div class="pill step">Keep a log of changes</div>
+    <div class="darr">&darr;</div>
+    <div class="pill step">Mark each phase complete</div>
+    <div class="darr">&darr;</div>
+    <div class="pill step">Build app</div>
+    <div class="caption">Opus 5 = great builder</div>
+  </div>
+
+  <div class="box reviewer">
+    <h2>Reviewer Agent</h2>
+    <div class="sub">Strands agent &middot; Claude Haiku 4.5</div>
+    <ul>
+      <li>Reads the repo</li>
+      <li>Lightweight feedback during the build</li>
+      <li>Files feedback the next session must address</li>
+      <li>Lets you respond while away</li>
+    </ul>
+  </div>
+
+  <div class="box discord">
+    <h2>Discord</h2>
+    <ul>
+      <li>Phase notifications</li>
+      <li>Build progress updates</li>
+    </ul>
+  </div>
+
+  <div class="user">
+    <div class="glyph">&#128100;</div>
+    <div class="label">User</div>
+  </div>
+  <div class="note" style="left:1600px; top:1166px; width:130px; text-align:right;">message the reviewer remotely</div>
+
+  <div class="box plain completed">Completed Build</div>
+  <div class="diamond"><div class="shape"></div><div class="words">Good<br>enough?</div></div>
+  <div class="box plain done">Done</div>
+  <div class="box plain phases">Create additional<br>phases (8&ndash;12)</div>
+
+  <svg class="wires" viewBox="0 0 1980 1470">
+    <defs>
+      <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#1c1917" stroke="none"/>
+      </marker>
+      <marker id="arrpink" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#d5566b" stroke="none"/>
+      </marker>
+    </defs>
+
+    <!-- T1 -> repo -->
+    <path d="M 496 380 C 540 380 560 388 616 392" marker-end="url(#arr)"/>
+    <text x="502" y="352">creates the</text>
+    <text x="500" y="374">build setup</text>
+
+    <!-- repo -> T2 -->
+    <path d="M 994 392 C 1040 390 1056 386 1108 384" marker-end="url(#arr)"/>
+    <text x="1006" y="366">trigger build</text>
+
+    <!-- T2 <-> reviewer -->
+    <path d="M 1556 420 C 1596 420 1614 424 1656 428" marker-start="url(#arr)" marker-end="url(#arr)"/>
+    <text x="1560" y="384">feedback /</text>
+    <text x="1556" y="406">corrections</text>
+
+    <!-- reviewer <-> discord -->
+    <path d="M 1804 660 L 1804 744" marker-start="url(#arr)" marker-end="url(#arr)"/>
+
+    <!-- discord <-> user, dashed -->
+    <path class="dashed" d="M 1804 928 L 1804 1006" marker-end="url(#arr)"/>
+    <path class="dashed" d="M 1896 1006 C 1930 950 1938 760 1904 662" marker-end="url(#arr)"/>
+
+    <!-- T2 -> completed build -->
+    <path d="M 1332 1054 L 1310 1144" marker-end="url(#arr)"/>
+
+    <!-- completed build -> review line -> T1 -->
+    <path d="M 1148 1187 L 300 1187 L 300 1058" marker-end="url(#arr)"/>
+    <text x="360" y="1176">Fable 5 review</text>
+
+    <!-- review line -> diamond -->
+    <path d="M 647 1187 L 647 1214" marker-end="url(#arr)"/>
+
+    <!-- grandma UX feedback, dashed pink into the review line -->
+    <path class="pinkdash" d="M 806 1008 C 790 1080 760 1140 720 1180" marker-end="url(#arrpink)"/>
+    <text x="700" y="1078" fill="#d5566b">UX feedback</text>
+
+    <!-- diamond yes -> done -->
+    <path d="M 548 1313 L 316 1310" marker-end="url(#arr)"/>
+    <text x="410" y="1296">Yes</text>
+
+    <!-- diamond no -> phases -->
+    <path d="M 746 1313 C 800 1330 840 1342 896 1352" marker-end="url(#arr)"/>
+    <text x="790" y="1318">No</text>
+
+    <!-- phases -> back to T2 -->
+    <path d="M 1202 1352 C 1360 1330 1440 1200 1452 1058" marker-end="url(#arr)"/>
+    <text x="1372" y="1300">Re-run build.sh /</text>
+    <text x="1382" y="1322">continue build</text>
+  </svg>
+</div>
+</body>
+</html>
