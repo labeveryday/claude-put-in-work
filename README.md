@@ -60,6 +60,7 @@ The script will:
 - Run Claude Code up to N sessions (configurable in `build.sh`)
 - Log each session to `build-logs/`
 - Stop early once `BUILD_PROGRESS.md` says all phases are complete — which, with the reviewer running, requires an APPROVED verdict on the final phase
+- Stop the reviewer on the way out, however the build ends
 - Post progress to Discord if `CLAUDE_DISCORD_WEBHOOK_URL` is set (see [Discord Notifications](#discord-notifications-webhook))
 
 Check `BUILD_PROGRESS.md` anytime, or just ask the reviewer in Discord.
@@ -116,7 +117,7 @@ The reviewer defaults to Haiku 4.5 to keep review costs at pennies per build —
 {
   "test_cmd": ".venv/bin/pytest -q",
   "app_start_cmd": "PORT={port} .venv/bin/python app.py",
-  "review_port": 5599,
+  "review_port": 5601,
   "app_ready_seconds": 30,
   "screenshot_paths": ["/", "/dashboard"]
 }
@@ -126,7 +127,11 @@ Omit `test_cmd` or `app_start_cmd` and the reviewer degrades gracefully to read-
 
 ### Lifecycle and multiple builds
 
-`build.sh` runs `./reviewer.sh start` (idempotent) and stops the reviewer on its way out — the reviewer lives exactly as long as the build, however the build ends, so orphaned reviewers never stack up across builds and answer the channel twice. `start` clears any stray instance before launching and `stop` kills every instance, not just the one the pidfile remembers. Want to ask it how the night went after the build finishes? Run `./reviewer.sh start` yourself; stop it with `/shutdown` or `./reviewer.sh stop`; `./reviewer.sh status` tells you if it's running.
+The reviewer lives exactly as long as the build:
+
+- `./build.sh` starts it and stops it on the way out — however the build ends, Ctrl+C included. Orphaned reviewers never stack up and answer the channel twice.
+- `./reviewer.sh start` clears any stray instance before launching; `stop` kills every instance, not just the one the pidfile remembers; `status` tells you if one is running.
+- Want to ask it how the night went after the build finishes? Run `./reviewer.sh start` yourself, and end it with `/shutdown` or `./reviewer.sh stop`.
 
 Running two builds at once? Each project runs its own reviewer process with its own state — reuse the same bot token, but give **each build its own channel**.
 

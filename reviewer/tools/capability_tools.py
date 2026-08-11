@@ -7,7 +7,7 @@ Both are driven by .review/config.json, written when the project is scaffolded:
     {
       "test_cmd": ".venv/bin/pytest -q",
       "app_start_cmd": "PORT={port} .venv/bin/python app.py",
-      "review_port": 5599,
+      "review_port": 5601,
       "app_ready_seconds": 30,
       "screenshot_paths": ["/", "/dashboard"]
     }
