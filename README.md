@@ -35,6 +35,40 @@ A framework for autonomous, multi-session app building with Claude Code. Describ
 
 Two ideas make this work: `BUILD_PROGRESS.md` gives Claude continuity across sessions, and the `.review/` file contract lets a second agent supervise the first without either one blocking.
 
+### The loop from your seat
+
+In practice this is two terminals: a strong planner in one, the builder loop in the other, and you deciding when it's done.
+
+```mermaid
+flowchart LR
+    subgraph T1["Terminal 1 — the planner"]
+        direction TB
+        P1["Discuss the idea and trade-offs"] --> P2["Break the work into phases"]
+        P2 --> P3["/autonomous-build writes the spec"]
+    end
+    subgraph T2["Terminal 2 — the builder"]
+        direction TB
+        B1["./build.sh"] --> B2["Each session reads PROMPT.md<br/>+ BUILD_PROGRESS.md"]
+        B2 --> B3["Builds a phase, commits,<br/>queues it for review"]
+        B3 --> B2
+    end
+    subgraph RV["The reviewer"]
+        direction TB
+        R1["Reviews each phase:<br/>tests + screenshots"] --> R2["Files feedback the next<br/>session must address"]
+        R2 --> R3["You steer from Discord"]
+    end
+    T1 -- "PROMPT.md · build.sh · reviewer/" --> T2
+    T2 <--> RV
+    T2 --> C["Completed build"]
+    C --> REV["Planner reviews the result<br/>(+ a usability pass)"]
+    REV --> D{"Good enough?"}
+    D -- yes --> DONE["Done"]
+    D -- no --> MORE["Append new phases<br/>to PROMPT.md"]
+    MORE --> T2
+```
+
+The planner's job doesn't end when the spec is written: it reviews the finished build, and "not yet" means appending phases and re-running `build.sh` — the loop runs until you say done, not until the script does.
+
 ## Quick Start
 
 ### 1. Plan
