@@ -31,6 +31,10 @@ case "${1:-status}" in
                 exit 0
             fi
         done
+        # One reviewer, ever. If the pidfile is dead but strays exist (started
+        # from another shell, or an old pidfile was deleted), clear them before
+        # launching, or two bots answer the same channel.
+        pkill -f "reviewer/agent.py" 2>/dev/null || true
         PY="python3"; [ -x ".venv/bin/python" ] && PY=".venv/bin/python"
         mkdir -p .review build-logs
         nohup "$PY" reviewer/agent.py >> "$LOGFILE" 2>&1 &
@@ -38,13 +42,16 @@ case "${1:-status}" in
         echo "Reviewer started (PID $(cat "$PIDFILE")) — log: $LOGFILE"
         ;;
     stop)
-        if running; then
-            kill "$(cat "$PIDFILE")" && rm -f "$PIDFILE"
-            echo "Reviewer stopped"
+        # Kill every instance, not only the one the pidfile remembers. A stale
+        # pidfile plus a start from another shell left two reviewers running
+        # and answering the same Discord channel twice.
+        if pgrep -f "reviewer/agent.py" > /dev/null 2>&1; then
+            pkill -f "reviewer/agent.py" || true
+            echo "Reviewer stopped (all instances)"
         else
-            rm -f "$PIDFILE"
             echo "Reviewer not running"
         fi
+        rm -f "$PIDFILE"
         ;;
     status)
         if running; then

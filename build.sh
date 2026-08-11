@@ -67,8 +67,14 @@ fi
 # Clean exit on Ctrl+C
 trap 'echo ""; echo ">>> Build interrupted at session $RUN/$MAX_RUNS"; exit 130' INT
 
+# The reviewer lives exactly as long as the build. It used to outlive it on
+# purpose, and what that bought in practice was orphaned reviewers stacking up
+# across builds and answering the same channel twice. The EXIT trap covers every
+# way out: the normal finish, the early break, set -e, and Ctrl+C. To chat with
+# the reviewer after a build, run ./reviewer.sh start yourself.
+trap '[ -x "./reviewer.sh" ] && ./reviewer.sh stop || true' EXIT
+
 # Ensure the Discord reviewer is up (idempotent; no-ops unless configured).
-# It deliberately outlives the build — stop it with ./reviewer.sh stop or /shutdown.
 [ -x "./reviewer.sh" ] && ./reviewer.sh start || true
 
 notify "🚀 **$PROJECT_NAME** build started — $(date '+%a %b %d, %I:%M %p') (up to $MAX_RUNS sessions)"

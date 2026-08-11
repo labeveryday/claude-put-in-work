@@ -126,7 +126,7 @@ Omit `test_cmd` or `app_start_cmd` and the reviewer degrades gracefully to read-
 
 ### Lifecycle and multiple builds
 
-`build.sh` runs `./reviewer.sh start` (idempotent), and the reviewer **outlives the build** — so when you wake up, you can ask it how the night went. Stop it with `/shutdown` or `./reviewer.sh stop`; `./reviewer.sh status` tells you if it's running.
+`build.sh` runs `./reviewer.sh start` (idempotent) and stops the reviewer on its way out — the reviewer lives exactly as long as the build, however the build ends, so orphaned reviewers never stack up across builds and answer the channel twice. `start` clears any stray instance before launching and `stop` kills every instance, not just the one the pidfile remembers. Want to ask it how the night went after the build finishes? Run `./reviewer.sh start` yourself; stop it with `/shutdown` or `./reviewer.sh stop`; `./reviewer.sh status` tells you if it's running.
 
 Running two builds at once? Each project runs its own reviewer process with its own state — reuse the same bot token, but give **each build its own channel**.
 

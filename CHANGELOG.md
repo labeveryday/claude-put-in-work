@@ -4,6 +4,38 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.1.0] - 2026-08-11
+
+The reviewer learns its place, and exactly one of it exists.
+
+### Changed
+- The reviewer lives exactly as long as the build. `build.sh` stops it through
+  an EXIT trap that covers the normal finish, the early break, `set -e`, and
+  Ctrl+C. It used to outlive the build on purpose, and what that bought in
+  practice was orphaned reviewers stacking up across builds and answering the
+  same Discord channel twice. To chat after a build, run `./reviewer.sh start`
+  yourself.
+- `reviewer.sh stop` kills every reviewer instance, not only the one the
+  pidfile remembers; `start` clears stray instances before launching. A stale
+  pidfile plus a start from another shell is how two bots ended up answering
+  one channel.
+- The reviewer's prompts state its role in one breath: review, report, file
+  feedback. It speaks as an observer ("the build added X", never "I will fix
+  Y"), and a change requested in chat is answered with a feedback id, not a
+  promise to do it. Its tools never let it write anything but feedback and
+  verdicts; the drift was in language, and now the language is closed too.
+
+### Fixed
+- The review watch loop is immortal: a transient Discord/DNS failure during a
+  reconnect used to kill the polling task silently, the heartbeat went stale,
+  and a build finished through the reviewer-offline exception with a phase
+  never reviewed. A bad pass now logs and waits; only process exit ends the
+  watch.
+- `do_review` reports whether a review actually ran, so a call skipped because
+  the lock was held is not counted against `.review/queue.done`.
+- The default review port is 5601: apps built by this framework reserve 5599
+  for themselves, and the old default collided with that guard.
+
 ## [3.0.0] - 2026-07-05
 
 v3: the build gets a supervisor. A Strands-powered reviewer agent runs alongside the build loop, reviews every phase, and holds the final phase to an approval gate — all from a Discord channel you can talk to.

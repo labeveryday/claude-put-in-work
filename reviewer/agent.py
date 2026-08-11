@@ -198,9 +198,11 @@ async def post(channel: discord.abc.Messageable, text: str,
         first = False
 
 
-async def do_review(channel: discord.abc.Messageable, phase: int | None, reason: str) -> None:
+async def do_review(channel: discord.abc.Messageable, phase: int | None, reason: str) -> bool:
+    """Returns True when a review actually ran — callers advancing queue.done
+    must not count a skipped (lock-held) call as done."""
     if review_lock.locked():
-        return
+        return False
     async with review_lock:
         started = time.time()
         title = f"phase {phase} review" if phase else "checkpoint review"
@@ -212,28 +214,43 @@ async def do_review(channel: discord.abc.Messageable, phase: int | None, reason:
                        files=new_screenshots(started))
         except Exception as e:
             await post(channel, f"⚠️ Reviewer error during {title}: {e}")
+    return True
 
 
 async def watch_queue(channel: discord.abc.Messageable) -> None:
-    """Poll .review/queue for phase-complete signals; heartbeat every pass."""
-    done_file = REVIEW_DIR / "queue.done"
-    while not client.is_closed():
-        REVIEW_DIR.mkdir(exist_ok=True)
-        HEARTBEAT_FILE.touch()
+    """Poll .review/queue for phase-complete signals; heartbeat every pass.
 
-        phases = queued_phases()
-        done = int(done_file.read_text()) if done_file.exists() else 0
-        if len(phases) > done:
-            for i in range(done, len(phases)):
-                await do_review(channel, phases[i], "builder finished the phase")
-                done_file.write_text(str(i + 1))
-        else:
-            # Safety net: commits landed but nothing reviewed for a while
-            last = last_review()
-            stale = (time.time() - last["time"]) > SAFETY_REVIEW_MINUTES * 60
-            head = git_head()
-            if stale and head and not head.startswith("fatal") and head != last["sha"]:
-                await do_review(channel, None, f"no review in {SAFETY_REVIEW_MINUTES}m with new commits")
+    Immortal by design: an overnight DNS failure during a Discord reconnect
+    once killed this task silently, the heartbeat went stale, and a build
+    finished through the reviewer-offline exception with a phase never
+    reviewed. A bad pass now logs and waits; only process exit ends the watch.
+    """
+    done_file = REVIEW_DIR / "queue.done"
+    while True:
+        try:
+            if client.is_closed():
+                await asyncio.sleep(QUEUE_POLL_SECONDS)
+                continue
+            REVIEW_DIR.mkdir(exist_ok=True)
+            HEARTBEAT_FILE.touch()
+
+            phases = queued_phases()
+            done = int(done_file.read_text()) if done_file.exists() else 0
+            if len(phases) > done:
+                for i in range(done, len(phases)):
+                    ran = await do_review(channel, phases[i], "builder finished the phase")
+                    if not ran:
+                        break  # another review holds the lock; retry this entry next poll
+                    done_file.write_text(str(i + 1))
+            else:
+                # Safety net: commits landed but nothing reviewed for a while
+                last = last_review()
+                stale = (time.time() - last["time"]) > SAFETY_REVIEW_MINUTES * 60
+                head = git_head()
+                if stale and head and not head.startswith("fatal") and head != last["sha"]:
+                    await do_review(channel, None, f"no review in {SAFETY_REVIEW_MINUTES}m with new commits")
+        except Exception as error:
+            print(f"watch_queue pass failed, continuing: {error}", flush=True)
 
         await asyncio.sleep(QUEUE_POLL_SECONDS)
 

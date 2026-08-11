@@ -97,7 +97,7 @@ def screenshot_page(path: str = "/") -> str:
     """
     cfg = _load_config()
     start_cmd = cfg.get("app_start_cmd")
-    port = int(cfg.get("review_port", 5599))
+    port = int(cfg.get("review_port", 5601))  # 5599 is the app's own reserved-port guard
     if not start_cmd:
         return "No app_start_cmd configured in .review/config.json - cannot screenshot."
 
